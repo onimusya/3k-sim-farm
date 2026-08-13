@@ -31,11 +31,23 @@ export const portOpen = (port, host = '127.0.0.1') =>
     s.setTimeout(400, () => (s.destroy(), res(false)));
   });
 
-/** Walk up from `from` looking for node_modules/.bin/<bin>. */
-function findBin(from, bin) {
+/**
+ * Walk up from `from` looking for a package's real JS entry point at
+ * node_modules/<pkg>/<entry>.
+ *
+ * Deliberately NOT node_modules/.bin/<name>. Neither shim is spawnable from
+ * Node on Windows: the extensionless one is a POSIX shell script that
+ * CreateProcess rejects (ENOENT), and the `.cmd` one is a batch file Node
+ * refuses to run without `shell: true` (EINVAL, since the CVE-2024-27980 fix).
+ * Both failures surface before the dev server starts and read like a missing
+ * install, which is what they are not. Launching the entry script with
+ * process.execPath sidesteps both, needs no shell, and keeps --host/--port out
+ * of cmd.exe quoting.
+ */
+function findPackageScript(from, pkg, entry) {
   let dir = resolve(from);
   for (let i = 0; i < 8; i++) {
-    const p = join(dir, 'node_modules', '.bin', bin);
+    const p = join(dir, 'node_modules', pkg, entry);
     if (existsSync(p)) return p;
     const up = dirname(dir);
     if (up === dir) break;
@@ -64,9 +76,9 @@ export async function ensureServer({ port = 5173, root = process.cwd(), quiet = 
     console.error(`[harness] port ${port} already in use — attaching to the existing server`);
     return null;
   }
-  const bin = findBin(root, 'vite');
-  if (!bin) throw new Error(`vite not found from ${root} — run npm install first`);
-  const proc = spawn(bin, ['--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
+  const script = findPackageScript(root, 'vite', join('bin', 'vite.js'));
+  if (!script) throw new Error(`vite not found from ${root} — run npm install first`);
+  const proc = spawn(process.execPath, [script, '--port', String(port), '--strictPort', '--host', '127.0.0.1'], {
     cwd: root,
     stdio: quiet ? 'ignore' : 'inherit',
     env: { ...process.env, KIT_NO_HMR: '1' },

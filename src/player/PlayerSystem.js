@@ -19,9 +19,21 @@ const CAMERA_OCCLUDED_RESPONSE = 22;
 const CAMERA_OFFSET_X = 10.5;
 const CAMERA_OFFSET_Y = 9.25;
 const CAMERA_OFFSET_Z = 12.5;
-const CAMERA_ISO_INV_LENGTH = 1 / Math.hypot(CAMERA_OFFSET_X, CAMERA_OFFSET_Z);
-const CAMERA_ISO_X = CAMERA_OFFSET_X * CAMERA_ISO_INV_LENGTH;
-const CAMERA_ISO_Z = CAMERA_OFFSET_Z * CAMERA_ISO_INV_LENGTH;
+// The fixed offset above is now only the STARTING pose of an orbit boom. Storing
+// it as length/azimuth/elevation is what lets the wheel change distance without
+// changing the viewing angle, and the right-drag change angle without changing
+// distance — the two staying independent is the whole point of the rig.
+const CAMERA_BOOM_LENGTH = Math.hypot(CAMERA_OFFSET_X, CAMERA_OFFSET_Y, CAMERA_OFFSET_Z);
+const CAMERA_BASE_AZIMUTH = Math.atan2(CAMERA_OFFSET_X, CAMERA_OFFSET_Z);
+const CAMERA_BASE_ELEVATION = Math.asin(CAMERA_OFFSET_Y / CAMERA_BOOM_LENGTH);
+// Floor keeps the camera above the crop line; ceiling stops short of straight
+// down, where the avatar becomes a hat and yaw loses its meaning on screen.
+const CAMERA_MIN_ELEVATION = 0.2;
+const CAMERA_MAX_ELEVATION = 1.28;
+const CAMERA_ORBIT_SPEED = 1.35;
+const CAMERA_ZOOM_RATE = 1.12;
+const CAMERA_MIN_ZOOM = 0.55;
+const CAMERA_MAX_ZOOM = 2.1;
 const CAMERA_LOOK_HEIGHT = 1.05;
 const CAMERA_TARGET_HEIGHT = 1.55;
 const CAMERA_TARGET_FRAME_RADIUS = 6.75;
@@ -38,12 +50,11 @@ const CAMERA_MARKER_LEAD = 0.45;
 const SEGMENT_EPSILON = 1e-7;
 const INV_SQRT_TWO = Math.SQRT1_2;
 
-// A fixed isometric basis makes controls independent of tiny camera smoothing
-// differences. W is screen-up; D is screen-right.
-const FORWARD_X = -INV_SQRT_TWO;
-const FORWARD_Z = -INV_SQRT_TWO;
-const RIGHT_X = INV_SQRT_TWO;
-const RIGHT_Z = -INV_SQRT_TWO;
+// W is screen-up and D is screen-right, derived from the camera's live azimuth
+// rather than a frozen 45 degrees. Deriving it is what keeps the controls honest
+// once the boom can orbit; it also removes a small pre-existing discrepancy,
+// since the boom's real azimuth is 40 degrees, not the 45 the old constants
+// assumed. Recomputed once per frame in _updateCameraOrbit, never per input.
 
 function dampAngle(current, target, amount) {
   let difference = (target - current + Math.PI) % (Math.PI * 2) - Math.PI;
@@ -86,6 +97,11 @@ export class PlayerSystem {
 
     this.yaw = Math.PI * 0.75;
     this.lastSafeYaw = this.yaw;
+    this.cameraAzimuth = CAMERA_BASE_AZIMUTH;
+    this.cameraElevation = CAMERA_BASE_ELEVATION;
+    this.cameraZoom = 1;
+    this._isoX = Math.sin(CAMERA_BASE_AZIMUTH);
+    this._isoZ = Math.cos(CAMERA_BASE_AZIMUTH);
     this.moving = false;
     this.controlEnabled = true;
     this.controlsEnabled = true;
@@ -129,6 +145,7 @@ export class PlayerSystem {
     this._focusAvailable = false;
     this._offSuccess = ctx.events.on('interaction:success', () => this._markSafePoint());
     this._offRestart = ctx.events.on('day:restart', () => {
+      this.resetCamera();
       this.teleport([SPAWN_X, GROUND_Y, SPAWN_Z], [0, Math.PI * 0.75, 0]);
       this._syncTarget(true);
     });
@@ -221,8 +238,8 @@ export class PlayerSystem {
     }
 
     input.axis2('left', 'right', 'back', 'forward', this._axis);
-    let moveX = FORWARD_X * this._axis.y + RIGHT_X * this._axis.x;
-    let moveZ = FORWARD_Z * this._axis.y + RIGHT_Z * this._axis.x;
+    let moveX = -this._isoX * this._axis.y + this._isoZ * this._axis.x;
+    let moveZ = -this._isoZ * this._axis.y - this._isoX * this._axis.x;
     let speed = MOVE_SPEED;
     let lengthSquared = moveX * moveX + moveZ * moveZ;
 
@@ -323,6 +340,7 @@ export class PlayerSystem {
     this._syncTarget(true);
 
     if (!this.controlEnabled || !ctx.input) return;
+    this._updateCameraOrbit(ctx);
     if (this.guidanceActive && this.activeTarget?.id === this._guidedTargetId) {
       // Free-running rAF can legitimately deliver no fixed step on a very fast
       // frame. Arrival is therefore also checked here so one-press guidance
@@ -418,6 +436,47 @@ export class PlayerSystem {
     });
   }
 
+  /**
+   * Right-drag orbits the boom, wheel dollies it. Read here in update() and not
+   * in fixedUpdate(): `look` and `wheel` are per-frame accumulations that
+   * beginFrame() clears, so a frame running zero or two fixed steps would drop
+   * or double the drag. The movement basis therefore lags the boom by one frame,
+   * which is well under the camera's own smoothing and never visible.
+   *
+   * No frozen check is needed — a frozen Input reports every control neutral, so
+   * the locked capture shots keep their authored camera untouched.
+   */
+  _updateCameraOrbit(ctx) {
+    const input = ctx.input;
+    if (input.held('secondary')) {
+      this.cameraAzimuth -= input.look.x * CAMERA_ORBIT_SPEED;
+      this.cameraElevation = THREE.MathUtils.clamp(
+        this.cameraElevation + input.look.y * CAMERA_ORBIT_SPEED,
+        CAMERA_MIN_ELEVATION,
+        CAMERA_MAX_ELEVATION,
+      );
+    }
+    if (input.wheel) {
+      this.cameraZoom = THREE.MathUtils.clamp(
+        this.cameraZoom * CAMERA_ZOOM_RATE ** input.wheel,
+        CAMERA_MIN_ZOOM,
+        CAMERA_MAX_ZOOM,
+      );
+    }
+    this._isoX = Math.sin(this.cameraAzimuth);
+    this._isoZ = Math.cos(this.cameraAzimuth);
+  }
+
+  /** Return the boom to its authored isometric pose. */
+  resetCamera() {
+    this.cameraAzimuth = CAMERA_BASE_AZIMUTH;
+    this.cameraElevation = CAMERA_BASE_ELEVATION;
+    this.cameraZoom = 1;
+    this._isoX = Math.sin(CAMERA_BASE_AZIMUTH);
+    this._isoZ = Math.cos(CAMERA_BASE_AZIMUTH);
+    return this;
+  }
+
   _resolveCameraPosition() {
     this._playerLook.set(this.position.x, this.position.y + CAMERA_LOOK_HEIGHT, this.position.z);
     this._cameraLook.copy(this._playerLook);
@@ -435,10 +494,12 @@ export class PlayerSystem {
       this._cameraLook.lerp(this._targetLook, CAMERA_TARGET_LOOK_WEIGHT);
     }
 
+    const boom = CAMERA_BOOM_LENGTH * this.cameraZoom;
+    const horizontal = Math.cos(this.cameraElevation) * boom;
     this._desiredCamera.set(
-      this._cameraLook.x + CAMERA_OFFSET_X,
-      this._cameraLook.y + CAMERA_OFFSET_Y,
-      this._cameraLook.z + CAMERA_OFFSET_Z,
+      this._cameraLook.x + this._isoX * horizontal,
+      this._cameraLook.y + Math.sin(this.cameraElevation) * boom,
+      this._cameraLook.z + this._isoZ * horizontal,
     );
     this._resolvedCamera.copy(this._desiredCamera);
 
@@ -497,21 +558,24 @@ export class PlayerSystem {
       this._cameraLook.copy(this._playerLook);
     }
 
-    // Both fallback distances retain the normal camera's horizontal azimuth,
-    // so W stays screen-up and D stays screen-right beside every large roof.
+    // Both fallback distances retain the camera's CURRENT horizontal azimuth,
+    // so W stays screen-up and D stays screen-right beside every large roof,
+    // whatever the player has orbited to. Fallback distance is deliberately not
+    // scaled by zoom: this branch exists to escape an occluder, and a zoomed-out
+    // boom would push it straight back behind the roof it just escaped.
     this._resolvedCamera.set(
-      this.position.x + CAMERA_ISO_X * CAMERA_FALLBACK_DISTANCE,
+      this.position.x + this._isoX * CAMERA_FALLBACK_DISTANCE,
       this.position.y + CAMERA_FALLBACK_HEIGHT,
-      this.position.z + CAMERA_ISO_Z * CAMERA_FALLBACK_DISTANCE,
+      this.position.z + this._isoZ * CAMERA_FALLBACK_DISTANCE,
     );
     if (
       this._viewBlocked(this._resolvedCamera, this._playerLook) ||
       this._viewBlocked(this._resolvedCamera, this._targetLook)
     ) {
       this._resolvedCamera.set(
-        this.position.x + CAMERA_ISO_X * CAMERA_FALLBACK_CLOSE,
+        this.position.x + this._isoX * CAMERA_FALLBACK_CLOSE,
         this.position.y + CAMERA_FALLBACK_HEIGHT,
-        this.position.z + CAMERA_ISO_Z * CAMERA_FALLBACK_CLOSE,
+        this.position.z + this._isoZ * CAMERA_FALLBACK_CLOSE,
       );
     }
   }

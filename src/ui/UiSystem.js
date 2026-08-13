@@ -402,7 +402,7 @@ export class UiSystem {
     if (eraText) eraText.textContent = 'Jian’an 2 · 197 CE';
     if (taskKicker) taskKicker.textContent = 'FIELD LEDGER · TODAY';
     if (bootText) bootText.textContent = 'A farm day near Xuchang · Jian’an 2';
-    if (bootHelp) bootHelp.textContent = 'WASD to move · E to work · R to return';
+    if (bootHelp) bootHelp.textContent = 'WASD to move · E to work · right-drag to orbit · wheel to zoom · R to return';
     if (completeSummary) completeSummary.textContent = 'You met the colony’s grain share and gave seed to a family from Xu.';
     const sealMini = this._els.taskSlip?.querySelector('.seal-mini');
     const bootSeal = this._els.boot?.querySelector('.boot-seal');

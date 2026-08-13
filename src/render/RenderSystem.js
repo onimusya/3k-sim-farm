@@ -45,7 +45,11 @@ export class RenderSystem {
     this.fill.position.set(-25, 20, -15);
     ctx.scene.add(this.fill);
 
-    ctx.scene.fog = new THREE.Fog(0x9db8ba, 55, 155);
+    // Far plane sits just inside the ground apron's rim so the horizon ring
+    // fades into sky rather than ending as a hard green edge. Near plane still
+    // clears the whole playfield (a camera 12 back from the far fence is ~45
+    // out), so nothing the player works on is ever hazed.
+    ctx.scene.fog = new THREE.Fog(0x9db8ba, 52, 140);
     this._bg = new THREE.Color(PALETTE.sky);
     this._sunDir = new THREE.Vector3();
     this._tmpColor = new THREE.Color();

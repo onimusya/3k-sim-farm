@@ -47,6 +47,10 @@ export class WorldSystem {
       grassLight: mat(PALETTE.grassLight), grassDark: mat(PALETTE.grassDark), leaf: mat(PALETTE.leaf),
       water: mat(PALETTE.water, { roughness: 0.28, metalness: 0.04, transparent: true, opacity: 0.82 }),
       stone: mat(0x716c60), stoneLight: mat(0x938b78), seal: mat(PALETTE.seal), lacquer: mat(PALETTE.lacquer),
+      // Distant hills carry their own tints rather than borrowing the roof
+      // materials: they sit far enough out that fog does most of the work, and
+      // starting light keeps them reading as haze instead of as near geometry.
+      hillFar: mat(0x7d9384, { roughness: 1 }), hillNear: mat(0x66806b, { roughness: 1 }),
       gold: mat(PALETTE.gold, { emissive: 0x6b3b05, emissiveIntensity: 0.55 }), white: mat(PALETTE.white), black: mat(PALETTE.black),
       thatch: mat(PALETTE.thatch, { roughness: 1 }), thatchLight: mat(PALETTE.thatchLight, { roughness: 1 }),
       thatchDark: mat(PALETTE.thatchDark, { roughness: 1 }), bamboo: mat(PALETTE.bamboo),
@@ -65,7 +69,7 @@ export class WorldSystem {
   _makeGround() {
     // A broad, low outer apron keeps the playable square from ending in a hard
     // tabletop edge when the camera drops near crop height.
-    const outer = new THREE.Mesh(new THREE.CircleGeometry(94, 64), M.grassDark);
+    const outer = new THREE.Mesh(new THREE.CircleGeometry(116, 64), M.grassDark);
     outer.name = 'DistantGroundApron'; outer.rotation.x = -Math.PI / 2; outer.scale.z = 0.78;
     outer.position.y = -0.055; outer.receiveShadow = true; this.root.add(outer);
     const base = box(66, 1.2, 62, M.grassDark, 0, -0.62, 0);
@@ -559,8 +563,7 @@ export class WorldSystem {
     const trees=[[-24,18,1.4],[-20,20,1.2],[-15,22,1.5],[16,18,1.4],[20,16,1.2],[24,12,1.55],[24,5,1.2],[23,-4,1.15],[18,-22,1.3],[4,-23,1.25],[-5,-22,1.4],[-18,15,1.3]];
     trees.forEach((p,i)=>this._makeTree(p[0],p[1],p[2],i===9||i===10));
     for(let i=0;i<7;i++)this._makeTree(-8+i*2.1,-17.5+(i%2)*0.6,0.75,i%2===0);
-    const ridge=new THREE.Group();ridge.position.set(0,-2,-75);
-    for(let i=0;i<13;i++){const m=new THREE.Mesh(new THREE.ConeGeometry(9+(i%3)*3,22+(i%4)*5,6),i%2?M.tile:M.stone);m.position.set(-70+i*12,10+(i%2)*2,(i%3)*3);m.scale.z=.6;ridge.add(m);}this.root.add(ridge);
+    this._makeHorizonRing();
     const wall=box(100,4.8,3,M.earthLight,0,2.4,-47);this.root.add(wall);
     for (const y of [.75,1.55,2.35,3.15,3.95]) this.root.add(box(100.2,.07,3.08,M.earth,0,y,-47));
     for(const x of [-34,0,34]){const t=box(6.2,7.2,5.2,M.earth,x,3.6,-46);for(const y of [1.1,2.2,3.3,4.4,5.5])t.add(box(6.25,.07,5.25,M.earthDark,0,y-3.6,0));t.add(roof(8.1,7.1,1.55,M.tile,0,3.55,0));this.root.add(t);}
@@ -569,6 +572,38 @@ export class WorldSystem {
     watch.add(box(5.4,.35,5.4,M.timberDark,0,6.4,0));watch.add(roof(6.8,6.8,2.6,M.tile,0,6.7,0));
     for(const x of [-2.3,2.3])watch.add(box(.18,1.3,.18,M.timber,x,7.05,2.35));
     const beacon=sphere(.38,0,M.gold,0,8.4,0,1.35);watch.add(beacon);this.root.add(watch);
+  }
+
+  _makeHorizonRing() {
+    // The old ridge was one row of cones on -Z, so any camera facing west or
+    // east watched the ground apron end against bare sky — the flaw that cost
+    // the animal shots their depth. Ring the apron instead, on the same 0.78 z
+    // ellipse the apron uses, so every hill keeps its base on ground rather
+    // than floating past the rim. Height is biased toward -Z: the Xuchang wall,
+    // gate towers and beacon stand in front of the tallest band, so the city
+    // reads as a direction you could walk to and not as loose scenery.
+    const COUNT=64, RX=96, RZ=76, HALF=COUNT/2;
+    const cone=new THREE.ConeGeometry(1,1,6);
+    const rows=[new THREE.InstancedMesh(cone,M.hillFar,HALF),new THREE.InstancedMesh(cone,M.hillNear,HALF)];
+    const d=new THREE.Object3D(), fill=[0,0];
+    for(let i=0;i<COUNT;i++){
+      const a=(i/COUNT)*Math.PI*2;
+      const north=(1-Math.sin(a))*0.5;      // 1 toward Xuchang (-Z), 0 opposite
+      // Coprime strides, not i%4: a short repeating cycle at this count reads as
+      // a row of identical teeth, and the eye finds the period immediately.
+      const h1=((i*37)%13)/13, h2=((i*61)%17)/17, h3=((i*29)%7)/7;
+      const height=7+north*9+h1*7;
+      const spread=6+h2*4.5;
+      const stretch=1+h3*0.16;              // break the perfect ellipse
+      d.position.set(Math.cos(a)*RX*stretch,height*0.5-2.4,Math.sin(a)*RZ*stretch);
+      d.scale.set(spread,height,spread*0.62);
+      d.rotation.set(0,a,0);
+      d.updateMatrix();
+      const row=i%2;rows[row].setMatrixAt(fill[row]++,d.matrix);
+    }
+    // The ring surrounds the camera, so its bounds always intersect the frustum
+    // anyway; skip the per-frame test rather than pay for a guaranteed pass.
+    for(const m of rows){m.frustumCulled=false;m.userData.noShadow=true;m.name='DistantHorizonRing';this.root.add(m);}
   }
 
   _makePathsAndGuides() {

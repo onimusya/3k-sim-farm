@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#211b16" />
+    <title>Fields of the Fractured Han</title>
+    <link rel="stylesheet" href="/src/ui/game.css" />
+  </head>
+  <body>
+    <main id="game-shell">
+      <canvas id="game" aria-label="Fields of the Fractured Han 3D game"></canvas>
+      <section id="hud" aria-live="polite">
+        <header id="era-card">
+          <span class="era-kicker">Xuchang Hinterland</span>
+          <strong>Jian’an 2 · 197 CE</strong>
+        </header>
+        <div id="day-clock" data-testid="day-phase"><span id="phase">Dawn</span><i></i><span id="hour">卯时 · 05:40</span></div>
+        <section id="task-slip">
+          <span class="seal-mini">田</span>
+          <div>
+            <small>FIELD LEDGER · TODAY</small>
+            <strong data-testid="task-current">Draw water from the well</strong>
+            <span data-testid="task-progress">1 of 7</span>
+          </div>
+        </section>
+        <div id="prompt" data-testid="interaction-prompt" hidden><kbd>E</kbd><span>Draw water</span></div>
+        <div id="carry" hidden><span id="carry-icon">◉</span><span id="carry-label">Water bucket</span></div>
+        <div id="controls"><span><kbd>E</kbd> Follow + complete task</span><span><kbd>WASD</kbd> Move</span><span><kbd>R</kbd> Return</span></div>
+        <section id="story-card" hidden>
+          <span id="story-seal">曹</span>
+          <div><small id="story-title">TUNTIAN OFFICE</small><strong id="story-speaker">Granary Clerk</strong><p id="story-body"></p></div>
+          <em>Press E</em>
+        </section>
+        <section id="day-complete" data-testid="day-complete" hidden>
+          <div class="complete-rays"></div>
+          <div class="complete-panel">
+            <span class="big-seal">成</span>
+            <small>FIELD LEDGER SEALED</small>
+            <h1>Day Complete</h1>
+            <p>You met the colony’s grain share and gave seed to a family from Xu.</p>
+            <dl><div><dt>Watered</dt><dd>3 beds</dd></div><div><dt>Harvested</dt><dd>5 sheaves</dd></div><div><dt>Shared</dt><dd>1 seed measure</dd></div></dl>
+            <button id="new-day">Begin again</button>
+          </div>
+        </section>
+        <div id="boot-card"><span class="boot-seal">田</span><h1>Fields of the<br/>Fractured Han</h1><p>A farm day near Xuchang · Jian’an 2</p><button id="begin">Begin the day</button><small>Press E once to follow + finish each gold-marked task · WASD optional · R returns</small></div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

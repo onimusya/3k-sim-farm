@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Fields of the Fractured Han · Progress</title>
+    <link rel="stylesheet" href="progress.css">
+  </head>
+  <body>
+    <header>
+      <div>
+        <small>LIVE BUILD LEDGER</small>
+        <h1>Fields of the Fractured Han</h1>
+        <p>Build → capture → blind A/B → fix the biggest gap → repeat</p>
+      </div>
+      <a href="/">Play current build ↗</a>
+    </header>
+    <main>
+      <section class="status">
+        <div><span>Phase</span><strong id="phase">Round 06 · awaiting recapture</strong></div>
+        <div><span>Strict win gate</span><strong>≥34 / 40 · every axis ≥8</strong></div>
+        <div><span>Thrixel scope</span><strong>Free-plan 250-cube vertical slice</strong></div>
+        <div><span>Current round</span><strong id="round">06 · action staging</strong></div>
+      </section>
+      <section>
+        <h2>Seven locked matched shots</h2>
+        <p class="lede">Official reference on the left; the real current build on the right. References remain unchanged across rounds.</p>
+        <div id="shots" class="shots"></div>
+      </section>
+      <section>
+        <h2>Critic ledger</h2>
+        <div id="verdicts"></div>
+      </section>
+    </main>
+    <script type="module" src="progress.js"></script>
+  </body>
+</html>

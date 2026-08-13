@@ -1,0 +1,16 @@
+# Dependencies and build output
+node_modules/
+dist/
+
+# Binary assets and render evidence — kept out of git deliberately.
+# assets/reference/official/ holds the seven locked benchmark screenshots the
+# A/B quality gate compares against; restore it locally before running captures.
+assets/
+thrixel_assets/
+shots/
+playtest-evidence/
+
+# Local tooling noise
+*.local
+.DS_Store
+Thumbs.db

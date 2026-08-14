@@ -3,9 +3,15 @@ node_modules/
 dist/
 
 # Binary assets and render evidence — kept out of git deliberately.
-# assets/reference/official/ holds the seven locked benchmark screenshots the
-# A/B quality gate compares against; restore it locally before running captures.
-assets/
+# assets/models/ is the exception: the two hero GLBs must reach the deployed
+# build, or Vite leaves their URLs unresolved and both 404 at runtime.
+# Everything else under assets/ stays out, including the seven locked benchmark
+# screenshots the A/B quality gate compares against — restore those locally
+# before running captures. Note the `assets/*` glob: git cannot re-include a
+# path whose parent directory is excluded, so a bare `assets/` would make the
+# negation below silently do nothing.
+assets/*
+!assets/models/
 thrixel_assets/
 shots/
 playtest-evidence/
